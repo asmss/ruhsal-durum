@@ -1,0 +1,35 @@
+import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter/material.dart';
+import 'package:ruhsal_durum/Login.dart';
+import 'package:ruhsal_durum/firebase_options.dart';
+import 'package:ruhsal_durum/SplashScreen.dart';
+import 'package:ruhsal_durum/IntroPage.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:intl/intl.dart';
+import 'package:intl/date_symbol_data_local.dart';
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await initializeDateFormatting('tr_TR', null);
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
+  await dotenv.load(fileName: ".env");
+  runApp(const Main());
+}
+
+class Main extends StatelessWidget {
+  const Main({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      initialRoute: '/',
+      routes: {
+        '/': (context) => const SplashScreen(),
+        '/login': (context) => const LoginPage(),
+        '/intro': (context) => const IntroPage(),
+      },
+    );
+  }
+}

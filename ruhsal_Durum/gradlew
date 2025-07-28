@@ -1,0 +1,19 @@
+1- npm init --yes //package json dosyası burdan gelcek  
+2- npm i Express // Express i burdan kurcan ve node modüles kısmı burdan gelcek eğerki node modules kısmı silinirse tekrardan eklemek eklersen npm install diyebilirsin
+3- eğerki canllı olarak yağtığın işlemlerin güncellenmesini istiyorsan nodemonu yükkle projene 
+npm i nodemon  //çalıştırırkende npx nodemon app.js diyorsun
+
+4-nodemonu daha modüler hale getirmek istiyorsan "start":"npx nodemon app.js" diyerek her seferinde konsolda npm start diyerek projeni başlat
+
+5- middlewarelerde eğerki next() kısmını eklersen bu demek oluyorki süreci diğer kaldığı yerden devam etttirecek
+6-* eğerki html sayfalarını getirmek istiyorsan res.sendFile(path.join(__dirname,"// hmtl dosyası nerdeyse mesela users klasörünün içindedir "users","index.html") yazarsın 
+
+7- eğerki front tarafında bootstrap kullanıyorsan  kurulumu ve işlemleri burda yapcan
+npm i bootstrap
+
+app.use(Express.static("node_modules"))   şeklinde yazarsan dizindeki dosyaların okunmasında bşr hata almazsın  bunu yaparkende her zaman sahte uzantı eklemeyi unutma mesela çağırırkende sahte uzantıyla çağırcaksın   app.use("/static",Express.static("node_modules")) 
+8-sonraki sıradad ise ejs kurulumu var  npm i ejs şeklinde 
+app.set("view engine","ejs") bu kısmı koduna ekliceksin tabikide ana dizindejiki dosaynın  olduğu yere
+
+sonra ise html sayfalarının uzantılarını .ejs şeklinde değiştirceksin
+

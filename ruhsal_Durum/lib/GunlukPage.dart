@@ -1,0 +1,298 @@
+import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+
+class GunlukPage extends StatefulWidget {
+  const GunlukPage({Key? key}) : super(key: key);
+
+  @override
+  State<GunlukPage> createState() => _GunlukPageState();
+}
+
+class _GunlukPageState extends State<GunlukPage> {
+  final FirebaseAuth _auth = FirebaseAuth.instance;
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+
+  String? _userId;
+
+  @override
+  void initState() {
+    super.initState();
+    _userId = _auth.currentUser?.uid;
+  }
+
+  void _showAddDailyDialog() {
+    final baslikController = TextEditingController();
+    final metinController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Günlük Ekle'),
+          backgroundColor: Colors.green[50],
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: baslikController,
+                decoration: InputDecoration(
+                  labelText: 'Başlık',
+                  focusedBorder: UnderlineInputBorder(
+                    borderSide: BorderSide(color: Colors.green.shade700),
+                  ),
+                ),
+              ),
+              TextField(
+                controller: metinController,
+                decoration: InputDecoration(
+                  labelText: 'Not',
+                  focusedBorder: UnderlineInputBorder(
+                    borderSide: BorderSide(color: Colors.green.shade700),
+                  ),
+                ),
+                maxLines: 3,
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context);
+              },
+              child: const Text('İptal'),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.green[700],
+              ),
+              onPressed: () async {
+                final baslik = baslikController.text.trim();
+                final metin = metinController.text.trim();
+
+                if (baslik.isEmpty || metin.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Başlık ve not boş olamaz!')),
+                  );
+                  return;
+                }
+
+                try {
+                  final user = FirebaseAuth.instance.currentUser;
+                  if (user == null) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Kullanıcı oturumu açık değil')),
+                    );
+                    return;
+                  }
+
+                  final dailyRef = FirebaseFirestore.instance
+                      .collection('users')
+                      .doc(user.uid)
+                      .collection('dailyEntries')
+                      .doc();
+
+                  await dailyRef.set({
+                    'baslik': baslik,
+                    'metin': metin,
+                    'timestamp': FieldValue.serverTimestamp(),
+                  });
+
+                  Navigator.pop(context);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Günlük başarıyla kaydedildi.')),
+                  );
+                } catch (e) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Hata oluştu: $e')),
+                  );
+                }
+              },
+              child: const Text('Kaydet'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _showDetailDialog(String baslik, String metin) async {
+    await showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text(baslik),
+          backgroundColor: Colors.green[50],
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          content: SingleChildScrollView(
+            child: Text(
+              metin,
+              style: TextStyle(color: Colors.green[900]),
+            ),
+          ),
+          actions: [
+            TextButton(
+              child: const Text('Kapat'),
+              onPressed: () => Navigator.pop(context),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _deleteDaily(String docId) async {
+    if (_userId == null) return;
+
+    try {
+      await _firestore
+          .collection('users')
+          .doc(_userId)
+          .collection('dailyEntries')
+          .doc(docId)
+          .delete();
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Günlük silindi.'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Silme hatası: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_userId == null) {
+      return Scaffold(
+        appBar: AppBar(
+          title: const Text('Günlükler',style: TextStyle(color: Colors.white),),
+          backgroundColor: Colors.green[700],
+        ),
+        body: Center(
+          child: Text(
+            'Lütfen giriş yapın.',
+            style: TextStyle(color: Colors.green[900], fontSize: 18),
+          ),
+        ),
+      );
+    }
+
+    return Scaffold(
+      backgroundColor: Colors.green[50],
+      appBar: AppBar(
+        title: const Text('Günlükler',style: TextStyle(color: Colors.white),),
+        backgroundColor: Colors.green[700],
+        iconTheme: const IconThemeData(color: Colors.white),
+
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _showAddDailyDialog,
+        label: const Text('Günlük Oluştur',style: TextStyle(color: Colors.white),),
+        icon: const Icon(Icons.note_add,color: Colors.white,),
+        backgroundColor: Colors.green[700],
+      ),
+      body: StreamBuilder<QuerySnapshot>(
+        stream: _firestore
+            .collection('users')
+            .doc(_userId)
+            .collection('dailyEntries')
+            .orderBy('timestamp', descending: true)
+            .snapshots(),
+        builder: (context, snapshot) {
+          if (snapshot.hasError) {
+            return Center(
+              child: Text(
+                'Bir hata oluştu.',
+                style: TextStyle(color: Colors.red[700]),
+              ),
+            );
+          }
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(
+                child: CircularProgressIndicator(color: Colors.green));
+          }
+
+          final docs = snapshot.data?.docs ?? [];
+
+          if (docs.isEmpty) {
+            return Center(
+              child: Text(
+                'Henüz günlük yok.',
+                style: TextStyle(color: Colors.green[800], fontSize: 16),
+              ),
+            );
+          }
+
+          return ListView.builder(
+            padding: const EdgeInsets.all(12),
+            itemCount: docs.length,
+            itemBuilder: (context, index) {
+              final doc = docs[index];
+              final baslik = doc['baslik'] ?? '';
+              final metin = doc['metin'] ?? '';
+              final docId = doc.id;
+
+              return Card(
+                margin: const EdgeInsets.symmetric(vertical: 8),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+                color: Colors.green[100],
+                child: ListTile(
+                  title: Text(
+                    baslik,
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: Colors.green[900],
+                    ),
+                  ),
+                  trailing: IconButton(
+                    icon: const Icon(Icons.delete, color: Colors.red),
+                    tooltip: 'Günlüğü Sil',
+                    onPressed: () async {
+                      final confirm = await showDialog<bool>(
+                        context: context,
+                        builder: (context) => AlertDialog(
+                          title: const Text('Silme Onayı'),
+                          backgroundColor: Colors.green[50],
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12)),
+                          content: const Text(
+                              'Bu günlüğü silmek istediğinizden emin misiniz?'),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(context, false),
+                              child: const Text('İptal'),
+                            ),
+                            ElevatedButton(
+                              style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.green[700]),
+                              onPressed: () => Navigator.pop(context, true),
+                              child: const Text('Sil'),
+                            ),
+                          ],
+                        ),
+                      );
+                      if (confirm == true) {
+                        await _deleteDaily(docId);
+                      }
+                    },
+                  ),
+                  onTap: () => _showDetailDialog(baslik, metin),
+                ),
+              );
+            },
+          );
+        },
+      ),
+    );
+  }
+}

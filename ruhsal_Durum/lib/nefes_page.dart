@@ -1,0 +1,691 @@
+import 'dart:async';
+import 'package:flutter/material.dart';
+
+void main() {
+  runApp(const MaterialApp(home: NefesPage()));
+}
+
+class NefesPage extends StatefulWidget {
+  const NefesPage({Key? key}) : super(key: key);
+
+  @override
+  State<NefesPage> createState() => _NefesPageState();
+}
+
+class _NefesPageState extends State<NefesPage> {
+  String selectedTechnique = '4-7-8';
+
+  final List<String> techniques = [
+    '4-7-8',
+    'Kutu Nefesi',
+    'Diyafram Nefesi',
+    'Ritmik Nefes',
+  ];
+
+  final Map<String, String> techniqueDescriptions = {
+    '4-7-8': '4-7-8 tekniği; 4 saniye nefes al, 7 saniye nefesi tut, 8 saniye nefesi ver. Zihni sakinleştirir ve rahatlatır.',
+    'Kutu Nefesi': 'Kutu Nefesi (Box Breathing) tekniği; 4 saniye nefes al, 4 saniye tut, 4 saniye nefes ver, 4 saniye tut. Stresi azaltmaya yardımcı olur.',
+    'Diyafram Nefesi': 'Diyafram Nefesi; derin nefes alıp diyaframı kullanarak nefesi tutma ve verme egzersizidir. Akciğer kapasitesini artırır ve rahatlama sağlar.',
+    'Ritmik Nefes': 'Ritmik Nefes; eşit sürelerde nefes alıp verme tekniğidir, örn: 3 saniye nefes al, 3 saniye nefes ver. Denge ve sakinlik sağlar.',
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.green[50],
+      appBar: AppBar(
+        title: const Text('Nefes Egzersizleri',style: TextStyle(color: Colors.white),),
+        backgroundColor: Colors.green[700],
+        iconTheme: const IconThemeData(color: Colors.white),
+
+      ),
+      body: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Zihnini ve bedenini rahatlatmak için derin bir nefes al.',
+              style: TextStyle(fontSize: 16, color: Colors.green[900]),
+            ),
+            const SizedBox(height: 20),
+            Row(
+              children: [
+                Expanded(
+                  child: DropdownButton<String>(
+                    value: selectedTechnique,
+                    isExpanded: true,
+                    dropdownColor: Colors.green[100],
+                    style: TextStyle(
+                      color: Colors.green[900],
+                      fontSize: 16,
+                    ),
+                    iconEnabledColor: Colors.green[700],
+                    onChanged: (value) {
+                      setState(() {
+                        selectedTechnique = value!;
+                      });
+                    },
+                    items: techniques
+                        .map((tech) =>
+                        DropdownMenuItem(value: tech, child: Text(tech)))
+                        .toList(),
+                  ),
+                ),
+                IconButton(
+                  icon: Icon(Icons.info_outline, color: Colors.green[700]),
+                  onPressed: () {
+                    _showTechniqueInfoDialog(selectedTechnique);
+                  },
+                ),
+              ],
+            ),
+            const SizedBox(height: 30),
+            Expanded(
+              child: Center(child: _buildTechniqueWidget()),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTechniqueWidget() {
+    switch (selectedTechnique) {
+      case '4-7-8':
+        return const Breathing478();
+      case 'Kutu Nefesi':
+        return const BoxBreathing();
+      case 'Diyafram Nefesi':
+        return const DiaphragmBreathing();
+      case 'Ritmik Nefes':
+        return const RhythmicBreathing();
+      default:
+        return const Text('Teknik bulunamadı');
+    }
+  }
+
+  void _showTechniqueInfoDialog(String technique) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('$technique Egzersizi Hakkında'),
+        content:
+        Text(techniqueDescriptions[technique] ?? 'Açıklama bulunamadı.'),
+        actions: [
+          TextButton(
+            child: const Text('Kapat',style: TextStyle(color: Colors.green),),
+
+            onPressed: () => Navigator.of(context).pop(),
+          )
+        ],
+      ),
+    );
+  }
+}
+
+class Breathing478 extends StatefulWidget {
+  const Breathing478({Key? key}) : super(key: key);
+
+  @override
+  State<Breathing478> createState() => _Breathing478State();
+}
+
+class _Breathing478State extends State<Breathing478>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _animation;
+
+  String _stage = "Hazır mısın?";
+  int _secondsLeft = 0;
+  Timer? _timer;
+  bool _isRunning = false;
+  int _breathCount = 0;
+
+  final List<_BreathPhase> _phases = [
+    _BreathPhase("Nefes Al", 4),
+    _BreathPhase("Nefesi Tut", 7),
+    _BreathPhase("Nefesi Ver", 8),
+  ];
+  int _currentPhaseIndex = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 4),
+    );
+    _animation = Tween<double>(begin: 100.0, end: 200.0).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
+    );
+  }
+
+  void _startBreathingCycle() {
+    if (_isRunning) return;
+
+    setState(() {
+      _isRunning = true;
+      _currentPhaseIndex = 0;
+      _breathCount = 0;
+    });
+
+    _runPhase();
+  }
+
+  void _stopBreathingCycle() {
+    setState(() {
+      _isRunning = false;
+      _stage = "Duraklatıldı";
+      _secondsLeft = 0;
+    });
+    _timer?.cancel();
+    _controller.reverse();
+  }
+
+  void _runPhase() {
+    if (!_isRunning) return;
+
+    final phase = _phases[_currentPhaseIndex];
+
+    setState(() {
+      _stage = phase.name;
+      _secondsLeft = phase.duration;
+    });
+
+    if (_stage == "Nefes Al") {
+      _controller.forward();
+    } else if (_stage == "Nefesi Ver") {
+      _controller.reverse();
+    }
+
+    _timer?.cancel();
+    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      setState(() {
+        _secondsLeft--;
+      });
+
+      if (_secondsLeft <= 0) {
+        timer.cancel();
+        _currentPhaseIndex++;
+        if (_currentPhaseIndex >= _phases.length) {
+          _currentPhaseIndex = 0;
+          _breathCount++;
+        }
+        _runPhase();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return _buildBaseBreathingWidget(
+      animation: _animation,
+      stage: _stage,
+      secondsLeft: _secondsLeft,
+      breathCount: _breathCount,
+      isRunning: _isRunning,
+      onStart: _startBreathingCycle,
+      onStop: _stopBreathingCycle,
+    );
+  }
+}
+
+class BoxBreathing extends StatefulWidget {
+  const BoxBreathing({Key? key}) : super(key: key);
+
+  @override
+  State<BoxBreathing> createState() => _BoxBreathingState();
+}
+
+class _BoxBreathingState extends State<BoxBreathing>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _animation;
+
+  String _stage = "Hazır mısın?";
+  int _secondsLeft = 0;
+  Timer? _timer;
+  bool _isRunning = false;
+  int _breathCount = 0;
+
+  final List<_BreathPhase> _phases = [
+    _BreathPhase("Nefes Al", 4),
+    _BreathPhase("Tut", 4),
+    _BreathPhase("Nefes Ver", 4),
+    _BreathPhase("Tut", 4),
+  ];
+  int _currentPhaseIndex = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 4),
+    );
+    _animation = Tween<double>(begin: 100.0, end: 200.0).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
+    );
+  }
+
+  void _startBreathingCycle() {
+    if (_isRunning) return;
+
+    setState(() {
+      _isRunning = true;
+      _currentPhaseIndex = 0;
+      _breathCount = 0;
+    });
+
+    _runPhase();
+  }
+
+  void _stopBreathingCycle() {
+    setState(() {
+      _isRunning = false;
+      _stage = "Duraklatıldı";
+      _secondsLeft = 0;
+    });
+    _timer?.cancel();
+    _controller.reverse();
+  }
+
+  void _runPhase() {
+    if (!_isRunning) return;
+
+    final phase = _phases[_currentPhaseIndex];
+
+    setState(() {
+      _stage = phase.name;
+      _secondsLeft = phase.duration;
+    });
+
+    if (_stage == "Nefes Al") {
+      _controller.forward();
+    } else if (_stage == "Nefes Ver") {
+      _controller.reverse();
+    }
+
+    _timer?.cancel();
+    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      setState(() {
+        _secondsLeft--;
+      });
+
+      if (_secondsLeft <= 0) {
+        timer.cancel();
+        _currentPhaseIndex++;
+        if (_currentPhaseIndex >= _phases.length) {
+          _currentPhaseIndex = 0;
+          _breathCount++;
+        }
+        _runPhase();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return _buildBaseBreathingWidget(
+      animation: _animation,
+      stage: _stage,
+      secondsLeft: _secondsLeft,
+      breathCount: _breathCount,
+      isRunning: _isRunning,
+      onStart: _startBreathingCycle,
+      onStop: _stopBreathingCycle,
+    );
+  }
+}
+
+class DiaphragmBreathing extends StatefulWidget {
+  const DiaphragmBreathing({Key? key}) : super(key: key);
+
+  @override
+  State<DiaphragmBreathing> createState() => _DiaphragmBreathingState();
+}
+
+class _DiaphragmBreathingState extends State<DiaphragmBreathing>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _animation;
+
+  String _stage = "Hazır mısın?";
+  int _secondsLeft = 0;
+  Timer? _timer;
+  bool _isRunning = false;
+  int _breathCount = 0;
+
+  final List<_BreathPhase> _phases = [
+    _BreathPhase("Derin Nefes Al", 5),
+    _BreathPhase("Nefesi Tut", 5),
+    _BreathPhase("Nefesi Ver", 5),
+  ];
+  int _currentPhaseIndex = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 5),
+    );
+    _animation = Tween<double>(begin: 100.0, end: 220.0).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
+    );
+  }
+
+  void _startBreathingCycle() {
+    if (_isRunning) return;
+
+    setState(() {
+      _isRunning = true;
+      _currentPhaseIndex = 0;
+      _breathCount = 0;
+    });
+
+    _runPhase();
+  }
+
+  void _stopBreathingCycle() {
+    setState(() {
+      _isRunning = false;
+      _stage = "Duraklatıldı";
+      _secondsLeft = 0;
+    });
+    _timer?.cancel();
+    _controller.reverse();
+  }
+
+  void _runPhase() {
+    if (!_isRunning) return;
+
+    final phase = _phases[_currentPhaseIndex];
+
+    setState(() {
+      _stage = phase.name;
+      _secondsLeft = phase.duration;
+    });
+
+    if (_stage == "Derin Nefes Al") {
+      _controller.forward();
+    } else if (_stage == "Nefesi Ver") {
+      _controller.reverse();
+    }
+
+    _timer?.cancel();
+    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      setState(() {
+        _secondsLeft--;
+      });
+
+      if (_secondsLeft <= 0) {
+        timer.cancel();
+        _currentPhaseIndex++;
+        if (_currentPhaseIndex >= _phases.length) {
+          _currentPhaseIndex = 0;
+          _breathCount++;
+        }
+        _runPhase();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return _buildBaseBreathingWidget(
+      animation: _animation,
+      stage: _stage,
+      secondsLeft: _secondsLeft,
+      breathCount: _breathCount,
+      isRunning: _isRunning,
+      onStart: _startBreathingCycle,
+      onStop: _stopBreathingCycle,
+    );
+  }
+}
+
+class RhythmicBreathing extends StatefulWidget {
+  const RhythmicBreathing({Key? key}) : super(key: key);
+
+  @override
+  State<RhythmicBreathing> createState() => _RhythmicBreathingState();
+}
+
+class _RhythmicBreathingState extends State<RhythmicBreathing>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _animation;
+
+  String _stage = "Hazır mısın?";
+  int _secondsLeft = 0;
+  Timer? _timer;
+  bool _isRunning = false;
+  int _breathCount = 0;
+
+  final List<_BreathPhase> _phases = [
+    _BreathPhase("Nefes Al", 3),
+    _BreathPhase("Nefes Ver", 3),
+  ];
+  int _currentPhaseIndex = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 3),
+    );
+    _animation = Tween<double>(begin: 100.0, end: 180.0).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
+    );
+  }
+
+  void _startBreathingCycle() {
+    if (_isRunning) return;
+
+    setState(() {
+      _isRunning = true;
+      _currentPhaseIndex = 0;
+      _breathCount = 0;
+    });
+
+    _runPhase();
+  }
+
+  void _stopBreathingCycle() {
+    setState(() {
+      _isRunning = false;
+      _stage = "Duraklatıldı";
+      _secondsLeft = 0;
+    });
+    _timer?.cancel();
+    _controller.reverse();
+  }
+
+  void _runPhase() {
+    if (!_isRunning) return;
+
+    final phase = _phases[_currentPhaseIndex];
+
+    setState(() {
+      _stage = phase.name;
+      _secondsLeft = phase.duration;
+    });
+
+    if (_stage == "Nefes Al") {
+      _controller.forward();
+    } else if (_stage == "Nefes Ver") {
+      _controller.reverse();
+    }
+
+    _timer?.cancel();
+    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      setState(() {
+        _secondsLeft--;
+      });
+
+      if (_secondsLeft <= 0) {
+        timer.cancel();
+        _currentPhaseIndex++;
+        if (_currentPhaseIndex >= _phases.length) {
+          _currentPhaseIndex = 0;
+          _breathCount++;
+        }
+        _runPhase();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return _buildBaseBreathingWidget(
+      animation: _animation,
+      stage: _stage,
+      secondsLeft: _secondsLeft,
+      breathCount: _breathCount,
+      isRunning: _isRunning,
+      onStart: _startBreathingCycle,
+      onStop: _stopBreathingCycle,
+    );
+  }
+}
+
+class _BreathPhase {
+  final String name;
+  final int duration;
+  _BreathPhase(this.name, this.duration);
+}
+
+Widget _buildBaseBreathingWidget({
+  required Animation<double> animation,
+  required String stage,
+  required int secondsLeft,
+  required int breathCount,
+  required bool isRunning,
+  required VoidCallback onStart,
+  required VoidCallback onStop,
+}) {
+  return Scaffold(
+    backgroundColor: Colors.green[50],
+    body: SafeArea(
+      child: Column(
+        children: [
+          const SizedBox(height: 40),
+          Center(
+            child: AnimatedBuilder(
+              animation: animation,
+              builder: (context, child) {
+                return Container(
+                  width: animation.value,
+                  height: animation.value,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.green.withOpacity(0.3),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.green.withOpacity(0.2),
+                        blurRadius: 10,
+                        spreadRadius: 5,
+                      ),
+                    ],
+                  ),
+                  child: Center(
+                    child: Text(
+                      secondsLeft > 0 ? '$secondsLeft' : '',
+                      style: TextStyle(
+                        fontSize: 28,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.green[900],
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+          const SizedBox(height: 30),
+          Text(
+            stage,
+            style: TextStyle(
+              fontSize: 26,
+              fontWeight: FontWeight.w600,
+              color: Colors.green[800],
+            ),
+          ),
+          const Spacer(),
+          Padding(
+            padding: const EdgeInsets.only(bottom: 30),
+            child: Column(
+              children: [
+                Text(
+                  'Tekrar Sayısı: $breathCount',
+                  style: TextStyle(
+                    fontSize: 18,
+                    color: Colors.green[900],
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(height: 20),
+                isRunning
+                    ? ElevatedButton.icon(
+                  onPressed: onStop,
+                  icon: const Icon(Icons.pause,color: Colors.white,),
+                  label: const Text("Duraklat",style: TextStyle(color: Colors.white)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.red[700],
+                    padding: const EdgeInsets.symmetric(
+                        vertical: 12, horizontal: 30),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8)),
+                  ),
+                )
+                    : ElevatedButton.icon(
+                  onPressed: onStart,
+                  icon: const Icon(Icons.play_arrow,color: Colors.white),
+                  label: const Text("Başla",style: TextStyle(color: Colors.white),),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.green[700],
+                    padding: const EdgeInsets.symmetric(
+                        vertical: 12, horizontal: 30),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8)),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+}

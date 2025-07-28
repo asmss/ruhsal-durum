@@ -1,0 +1,405 @@
+import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+
+class PlanlamaMainPage extends StatefulWidget {
+  const PlanlamaMainPage({super.key});
+
+  @override
+  State<PlanlamaMainPage> createState() => _PlanlamaMainPageState();
+}
+
+class _PlanlamaMainPageState extends State<PlanlamaMainPage> with SingleTickerProviderStateMixin {
+  final userId = FirebaseAuth.instance.currentUser?.uid;
+
+  late AnimationController _controller;
+  late Animation<double> _fadeAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 500),
+    );
+
+    _fadeAnimation = CurvedAnimation(parent: _controller, curve: Curves.easeIn);
+
+    _controller.forward();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (userId == null) {
+      return const Scaffold(
+        body: Center(child: Text("Giriş yapılmamış")),
+      );
+    }
+
+    return Scaffold(
+      backgroundColor: Colors.green[50],
+      appBar: AppBar(
+        title: const Text("Planlarım",style: TextStyle(color: Colors.white),),
+        backgroundColor: Colors.green[700],
+        iconTheme: const IconThemeData(color: Colors.white),
+        elevation: 0,
+      ),
+      floatingActionButton: FadeTransition(
+        opacity: _fadeAnimation,
+        child: FloatingActionButton(
+          backgroundColor: Colors.green[700],
+          onPressed: () async {
+            final result = await showDialog(
+              context: context,
+              builder: (_) => const PlanEkleDialog(),
+            );
+
+            if (result != null && result is Map<String, dynamic>) {
+              await FirebaseFirestore.instance
+                  .collection("users")
+                  .doc(userId)
+                  .collection("plans")
+                  .add({
+                ...result,
+                "timestamp": FieldValue.serverTimestamp()
+              });
+            }
+          },
+          child: const Icon(
+            Icons.add,
+            color: Colors.white,
+          ),          tooltip: "Yeni Plan Ekle",
+        ),
+      ),
+      body: FadeTransition(
+        opacity: _fadeAnimation,
+        child: StreamBuilder<QuerySnapshot>(
+          stream: FirebaseFirestore.instance
+              .collection("users")
+              .doc(userId)
+              .collection("plans")
+              .orderBy("timestamp", descending: true)
+              .snapshots(),
+          builder: (context, snapshot) {
+            if (!snapshot.hasData) {
+              return const Center(child: CircularProgressIndicator());
+            }
+
+            final plans = snapshot.data!.docs;
+
+            if (plans.isEmpty) {
+              return Center(
+                child: Text(
+                  "Henüz bir planınız yok",
+                  style: TextStyle(color: Colors.green[700], fontSize: 18),
+                ),
+              );
+            }
+
+            return ListView(
+              padding: const EdgeInsets.only(bottom: 80, top: 8),
+              children: plans.map((doc) {
+                final data = doc.data() as Map<String, dynamic>;
+                return PlanCard(
+                  planId: doc.id,
+                  userId: userId!,
+                  data: data,
+                );
+              }).toList(),
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
+
+class PlanEkleDialog extends StatefulWidget {
+  const PlanEkleDialog({super.key});
+
+  @override
+  State<PlanEkleDialog> createState() => _PlanEkleDialogState();
+}
+
+class _PlanEkleDialogState extends State<PlanEkleDialog> {
+  final List<String> meditationDays = [];
+  final List<String> breathingDays = [];
+  final List<String> tasks = [];
+  final taskController = TextEditingController();
+  String selectedMonth = "Temmuz";
+  String selectedWeek = "1";
+
+  void addTask() {
+    final task = taskController.text.trim();
+    if (task.isNotEmpty && tasks.length < 5) {
+      setState(() {
+        tasks.add(task);
+        taskController.clear();
+      });
+    } else if(tasks.length >= 5) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("En fazla 5 görev ekleyebilirsiniz")),
+      );
+    }
+  }
+
+  @override
+  void dispose() {
+    taskController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text("Yeni Plan Oluştur"),
+      content: SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            DropdownButtonFormField<String>(
+              value: selectedMonth,
+              items: const [
+                "Ocak", "Şubat", "Mart", "Nisan", "Mayıs","Haziran","Temmuz",
+                "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"
+              ].map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
+              onChanged: (val) => setState(() => selectedMonth = val!),
+              decoration: const InputDecoration(labelText: "Ay"),
+            ),
+            const SizedBox(height: 10),
+            DropdownButtonFormField<String>(
+              value: selectedWeek,
+              items: const ["1", "2", "3", "4"]
+                  .map((e) => DropdownMenuItem(value: e, child: Text("Hafta $e")))
+                  .toList(),
+              onChanged: (val) => setState(() => selectedWeek = val!),
+              decoration: const InputDecoration(labelText: "Hafta"),
+            ),
+            const SizedBox(height: 20),
+            const Text("Meditasyon Günleri"),
+            Wrap(
+              spacing: 8,
+              children: ["Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz"].map((day) {
+                final selected = meditationDays.contains(day);
+                return FilterChip(
+                  label: Text(day),
+                  selected: selected,
+                  selectedColor: Colors.green[300],
+                  onSelected: (val) {
+                    setState(() {
+                      val ? meditationDays.add(day) : meditationDays.remove(day);
+                    });
+                  },
+                );
+              }).toList(),
+            ),
+            const SizedBox(height: 20),
+            const Text("Nefes Egzersizi Günleri"),
+            Wrap(
+              spacing: 8,
+              children: ["Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz"].map((day) {
+                final selected = breathingDays.contains(day);
+                return FilterChip(
+                  label: Text(day),
+                  selected: selected,
+                  selectedColor: Colors.green[300],
+                  onSelected: (val) {
+                    setState(() {
+                      val ? breathingDays.add(day) : breathingDays.remove(day);
+                    });
+                  },
+                );
+              }).toList(),
+            ),
+            const SizedBox(height: 20),
+            TextField(
+              controller: taskController,
+              decoration: InputDecoration(
+                labelText: "Görev Ekle (max 5)",
+                suffixIcon: IconButton(icon: const Icon(Icons.add), onPressed: addTask),
+              ),
+              onSubmitted: (_) => addTask(),
+            ),
+            const SizedBox(height: 10),
+            Column(
+              children: tasks.map((task) => ListTile(
+                leading: const Icon(Icons.check_circle_outline, color: Colors.green),
+                title: Text(task),
+                trailing: IconButton(
+                  icon: const Icon(Icons.close, color: Colors.red),
+                  onPressed: () {
+                    setState(() {
+                      tasks.remove(task);
+                    });
+                  },
+                ),
+              )).toList(),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text("İptal",style: TextStyle(color: Colors.green),)),
+        ElevatedButton(
+          style: ElevatedButton.styleFrom(backgroundColor: Colors.green[700]),
+          onPressed: () {
+            if(meditationDays.isEmpty && breathingDays.isEmpty && tasks.isEmpty){
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text("Lütfen en az bir alan doldurun")),
+              );
+              return;
+            }
+            final progress = {
+              "meditationDays": {for (var d in meditationDays) d: false},
+              "breathingDays": {for (var d in breathingDays) d: false},
+              "tasks": {for (var t in tasks) t: false},
+            };
+            Navigator.pop(context, {
+              "month": selectedMonth,
+              "week": selectedWeek,
+              "meditationDays": meditationDays,
+              "breathingDays": breathingDays,
+              "tasks": tasks,
+              "progress": progress
+            });
+          },
+          child: const Text("Planla",style: TextStyle(color: Colors.white),),
+        )
+      ],
+    );
+  }
+}
+
+class PlanCard extends StatefulWidget {
+  final String planId;
+  final String userId;
+  final Map<String, dynamic> data;
+
+  const PlanCard({super.key, required this.planId, required this.userId, required this.data});
+
+  @override
+  State<PlanCard> createState() => _PlanCardState();
+}
+
+class _PlanCardState extends State<PlanCard> {
+  late Map<String, bool> meditationProgress;
+  late Map<String, bool> breathingProgress;
+  late Map<String, bool> taskProgress;
+  bool expanded = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final progress = widget.data['progress'] ?? {};
+    meditationProgress = Map<String, bool>.from(progress['meditationDays'] ?? {});
+    breathingProgress = Map<String, bool>.from(progress['breathingDays'] ?? {});
+    taskProgress = Map<String, bool>.from(progress['tasks'] ?? {});
+  }
+
+  void updateProgress(String type, String key, bool value) {
+    setState(() {
+      if (type == 'meditationDays') {
+        meditationProgress[key] = value;
+      } else if (type == 'breathingDays') {
+        breathingProgress[key] = value;
+      } else {
+        taskProgress[key] = value;
+      }
+    });
+
+    FirebaseFirestore.instance
+        .collection("users")
+        .doc(widget.userId)
+        .collection("plans")
+        .doc(widget.planId)
+        .update({
+      "progress": {
+        "meditationDays": meditationProgress,
+        "breathingDays": breathingProgress,
+        "tasks": taskProgress,
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final meditationDays = List<String>.from(widget.data['meditationDays'] ?? []);
+    final breathingDays = List<String>.from(widget.data['breathingDays'] ?? []);
+    final tasks = List<String>.from(widget.data['tasks'] ?? []);
+
+    return Card(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+      elevation: 4,
+      color: Colors.green[50],
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: () => setState(() => expanded = !expanded),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: AnimatedSize(
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeInOut,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  "Hafta: ${widget.data['week']}, Ay: ${widget.data['month']}",
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                  ),
+                ),
+                if (expanded) ...[
+                  const Divider(height: 20, thickness: 1.2),
+                  const Text("Meditasyon Günleri:", style: TextStyle(fontWeight: FontWeight.w600)),
+                  ...meditationDays.map((day) => CheckboxListTile(
+                    value: meditationProgress[day] ?? false,
+                    title: Text(day),
+                    controlAffinity: ListTileControlAffinity.leading,
+                    activeColor: Colors.green,
+                    checkColor: Colors.white,
+                    onChanged: (val) {
+                      if (val != null) updateProgress("meditationDays", day, val);
+                    },
+                  )),
+                  const SizedBox(height: 8),
+                  const Text("Nefes Egzersizi Günleri:", style: TextStyle(fontWeight: FontWeight.w600)),
+                  ...breathingDays.map((day) => CheckboxListTile(
+                    value: breathingProgress[day] ?? false,
+                    title: Text(day),
+                    controlAffinity: ListTileControlAffinity.leading,
+                    activeColor: Colors.green,
+                    checkColor: Colors.white,
+                    onChanged: (val) {
+                      if (val != null) updateProgress("breathingDays", day, val);
+                    },
+                  )),
+                  const SizedBox(height: 8),
+                  const Text("Görevler:", style: TextStyle(fontWeight: FontWeight.w600)),
+                  ...tasks.map((task) => CheckboxListTile(
+                    value: taskProgress[task] ?? false,
+                    title: Text(task),
+                    controlAffinity: ListTileControlAffinity.leading,
+                    activeColor: Colors.green,
+                    checkColor: Colors.white,
+                    onChanged: (val) {
+                      if (val != null) updateProgress("tasks", task, val);
+                    },
+                  )),
+                ]
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}

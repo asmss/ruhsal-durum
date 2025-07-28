@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "876825976672",
+    "project_id": "ruhsal-38a23",
+    "storage_bucket": "ruhsal-38a23.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:876825976672:android:19536af256c2b0b9edc805",
+        "android_client_info": {
+          "package_name": "com.example.ruhsal_durum"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBPkOAJ3C03-pXxxnQ3iu5APPQSClmJNxk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

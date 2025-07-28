@@ -1,0 +1,360 @@
+import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+
+import 'SuggestionsPage.dart';
+
+class ChatbotPage extends StatefulWidget {
+  final String initialPrompt;
+  final String moodLabel;
+  final String moodEmoji;
+  const ChatbotPage({
+    required this.initialPrompt,
+    required this.moodLabel,
+    required this.moodEmoji,
+    Key? key,
+  }) : super(key: key);
+
+  @override
+  _ChatbotPageState createState() => _ChatbotPageState();
+}
+
+class _ChatbotPageState extends State<ChatbotPage> {
+  final List<ChatMessage> _messages = [];
+  final TextEditingController _controller = TextEditingController();
+  bool _isTyping = false;
+  final ScrollController _scrollController = ScrollController();
+
+  final String _apiKey = 'AIzaSyA5BRg1GREBKnByzAHv_P5zq-IzqbjcPco';
+
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final FirebaseAuth _auth = FirebaseAuth.instance;
+
+  String? get _userId => _auth.currentUser?.uid;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _controller.text = widget.initialPrompt;
+      _sendMessage();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.green[200],
+      appBar: AppBar(
+        title: Text('Ruhsal Destek Asistanı', style: TextStyle(color: Colors.white)),
+        backgroundColor: Colors.green[700],
+        iconTheme: const IconThemeData(color: Colors.white),
+
+        actions: [
+          IconButton(
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => SavedSuggestionsPage()),
+              );
+            },
+            icon: Icon(Icons.bookmarks),
+            tooltip: 'Kaydedilen Öneriler',
+          ),
+        ],
+      ),
+      body: Column(
+        children: [
+          Expanded(
+            child: ListView.builder(
+              controller: _scrollController,
+              reverse: true,
+              padding: EdgeInsets.all(16),
+              itemCount: _messages.length,
+              itemBuilder: (ctx, i) => _buildMessageBubble(_messages[i]),
+            ),
+          ),
+          if (_isTyping) _buildTypingIndicator(),
+          _buildMessageInput(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMessageBubble(ChatMessage message) {
+    return Container(
+      margin: EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        mainAxisAlignment:
+        message.isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
+        children: [
+          if (!message.isUser)
+            CircleAvatar(
+              backgroundColor: Colors.green[100],
+              child: Text('AI', style: TextStyle(color: Colors.green[800])),
+            ),
+          SizedBox(width: 8),
+          Flexible(
+            child: Align(
+              alignment: message.isUser ? Alignment.centerRight : Alignment.centerLeft,
+              child: Container(
+                constraints: BoxConstraints(
+                  maxWidth: MediaQuery.of(context).size.width * 0.7,
+                ),
+                padding: const EdgeInsets.all(12),
+                margin: const EdgeInsets.symmetric(vertical: 4),
+                decoration: BoxDecoration(
+                  color: message.isUser ? Colors.green[100] : Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: [
+                    BoxShadow(color: Colors.black12, blurRadius: 2),
+                  ],
+                ),
+                child: message.isUser
+                    ? Text(message.text, softWrap: true)
+                    : Row(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        message.text,
+                        softWrap: true,
+                      ),
+                    ),
+                    IconButton(
+                      icon: Icon(
+                        message.isSaved ? Icons.bookmark : Icons.bookmark_border,
+                        color: message.isSaved ? Colors.black : Colors.grey,
+                      ),
+                      onPressed: () => _toggleSaveMessage(message),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTypingIndicator() {
+    return Padding(
+      padding: EdgeInsets.all(8),
+      child: Row(
+        children: [
+          CircularProgressIndicator(strokeWidth: 2),
+          SizedBox(width: 8),
+          Text('Yanıt oluşturuluyor...'),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMessageInput() {
+    return Padding(
+      padding: EdgeInsets.all(8),
+      child: Row(
+        children: [
+          Expanded(
+            child: TextField(
+
+              controller: _controller,
+              decoration: InputDecoration(
+                filled: true,
+                fillColor: Colors.green[50],
+                hintText: "Mesaj yaz...",
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(24),
+                ),
+              ),
+              onSubmitted: (_) => _sendMessage(),
+            ),
+          ),
+          SizedBox(width: 8),
+          FloatingActionButton(
+            mini: true,
+            backgroundColor: Colors.green[600],
+            child: Icon(Icons.send, color: Colors.white),
+            onPressed: _sendMessage,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _toggleSaveMessage(ChatMessage message) async {
+    if (_userId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Lütfen önce giriş yapın.")),
+      );
+      return;
+    }
+
+    final suggestionsRef =
+    _firestore.collection('users').doc(_userId).collection('suggestions');
+
+    try {
+      if (message.isSaved) {
+        if (message.docId != null) {
+          await suggestionsRef.doc(message.docId).delete();
+        }
+        setState(() {
+          message.isSaved = false;
+          message.docId = null;
+        });
+      } else {
+        final docRef = await suggestionsRef.add({
+          'text': message.text,
+          'timestamp': FieldValue.serverTimestamp(),
+        });
+        setState(() {
+          message.isSaved = true;
+          message.docId = docRef.id;
+        });
+      }
+    } catch (e) {
+      debugPrint('Firestore kaydetme hatası: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Kaydetme sırasında hata oluştu.")),
+      );
+    }
+  }
+
+  Future<void> _loadSavedMessages() async {
+    if (_userId == null) return;
+
+    final suggestionsRef =
+    _firestore.collection('users').doc(_userId).collection('suggestions');
+    final snapshot = await suggestionsRef.get();
+
+    final savedDocs = snapshot.docs;
+
+    setState(() {
+      for (var message in _messages) {
+        if (!message.isUser) {
+          final savedDoc = savedDocs.cast<DocumentSnapshot?>().firstWhere(
+                (doc) => doc != null && doc['text'] == message.text,
+            orElse: () => null,
+          );
+          if (savedDoc != null) {
+            message.isSaved = true;
+            message.docId = savedDoc.id;
+          }
+        }
+      }
+    });
+  }
+
+  Future<void> _sendMessage() async {
+    final text = _controller.text.trim();
+    if (text.isEmpty) return;
+
+    setState(() {
+      _messages.insert(0, ChatMessage(text: text, isUser: true));
+      _isTyping = true;
+      _controller.clear();
+    });
+
+    try {
+      final response = await _getGeminiResponseWithRetry(text);
+      setState(() {
+        _messages.insert(0, ChatMessage(text: response, isUser: false));
+      });
+      await _loadSavedMessages();
+    } catch (e) {
+      setState(() {
+        _messages.insert(
+          0,
+          ChatMessage(
+            text: "Hata: ${e.toString().replaceAll('Exception: ', '')}",
+            isUser: false,
+          ),
+        );
+      });
+    } finally {
+      setState(() => _isTyping = false);
+    }
+  }
+
+  Future<String> _getGeminiResponseWithRetry(String prompt,
+      {int retries = 3}) async {
+    int attempt = 0;
+    while (attempt < retries) {
+      try {
+        return await _getGeminiResponse(prompt);
+      } catch (e) {
+        if (e.toString().contains('overloaded') ||
+            e.toString().contains('Üzgünüm')) {
+          await Future.delayed(Duration(seconds: 2 * (attempt + 1)));
+          attempt++;
+        } else {
+          rethrow;
+        }
+      }
+    }
+    throw Exception("Model şu anda çok meşgul. Lütfen daha sonra tekrar deneyin.");
+  }
+
+  Future<String> _getGeminiResponse(String prompt) async {
+    try {
+      final url = Uri.parse(
+          'https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=$_apiKey');
+      final response = await http.post(
+        url,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          "contents": [
+            {"parts": [{"text": prompt}], "role": "user"}
+          ],
+          "safetySettings": [
+            {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_ONLY_HIGH"}
+          ],
+          "generationConfig": {"temperature": 0.9, "topP": 1, "maxOutputTokens": 2048}
+        }),
+      );
+
+      final data = jsonDecode(response.body);
+
+      if (response.statusCode == 200) {
+        if (data['candidates'] != null && data['candidates'].isNotEmpty) {
+          return data['candidates'][0]['content']['parts'][0]['text'];
+        } else {
+          return "Yanıt güvenlik kontrolünden geçemedi. Lütfen farklı bir ifade kullanın.";
+        }
+      } else {
+        throw Exception(data['error']?['message'] ?? 'API hatası (${response.statusCode})');
+      }
+    } catch (e) {
+      debugPrint('API Hatası Detayı: $e');
+      throw Exception("Üzgünüm, bir hata oluştu. Lütfen daha sonra tekrar deneyin.");
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    _scrollController.dispose();
+    super.dispose();
+  }
+}
+
+class ChatMessage {
+  final String text;
+  final bool isUser;
+  bool isSaved;
+  String? docId;
+
+  ChatMessage({
+    required this.text,
+    required this.isUser,
+    this.isSaved = false,
+    this.docId,
+  });
+}
