@@ -47,7 +47,29 @@ class SavedSuggestionsPage extends StatelessWidget {
       ),
     );
   }
+/*
+  final TextEditingController _textController = TextEditingController();
+Widget _send_message(){
+return container(
+child: Column(
+ children:[
+  row(
+  const textfield(
+   controller: textController,
+),
+  const Text("istenen veriyi girin")
+   ),
+]
 
+)
+
+
+);
+
+}
+
+
+*/
   Widget _buildSuggestionCard(BuildContext context, QueryDocumentSnapshot data) {
     return Card(
       elevation: 4,
